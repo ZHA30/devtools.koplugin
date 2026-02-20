@@ -34,7 +34,6 @@ Menu items:
 Dispatcher actions:
 
 - `toggle_devtools_server`: toggles Devtools service.
-- `start_devtools_server`: start-only action (does nothing if already running).
 
 ## Web UI Overview
 

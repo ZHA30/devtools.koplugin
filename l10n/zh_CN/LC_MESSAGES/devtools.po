@@ -103,9 +103,6 @@ msgstr "设置 Devtools 端口"
 msgid "Set authentication code"
 msgstr "设置认证码"
 
-msgid "Start Devtools server"
-msgstr "启动 Devtools 服务"
-
 msgid "Target is not a directory."
 msgstr "目标不是目录。"
 

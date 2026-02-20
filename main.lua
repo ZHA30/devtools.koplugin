@@ -145,12 +145,6 @@ function Devtools:onDispatcherRegisterActions()
         title = _("Toggle Devtools server"),
         general = true,
     })
-    Dispatcher:registerAction("start_devtools_server", {
-        category = "none",
-        event = "StartDevtoolsServer",
-        title = _("Start Devtools server"),
-        general = true,
-    })
 end
 
 function Devtools:isRunning()
@@ -656,12 +650,6 @@ function Devtools:onToggleDevtoolsServer()
     if self:isRunning() then
         self:stop(false, false)
     else
-        self:start(false)
-    end
-end
-
-function Devtools:onStartDevtoolsServer()
-    if not self:isRunning() then
         self:start(false)
     end
 end

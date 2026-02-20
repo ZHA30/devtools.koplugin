@@ -101,9 +101,6 @@ msgstr ""
 msgid "Set authentication code"
 msgstr ""
 
-msgid "Start Devtools server"
-msgstr ""
-
 msgid "Target is not a directory."
 msgstr ""
 
