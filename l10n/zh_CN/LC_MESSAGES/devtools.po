@@ -1,0 +1,122 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: devtools\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Access denied."
+msgstr "拒绝访问。"
+
+msgid "Authentication"
+msgstr "认证"
+
+msgid "Authentication code"
+msgstr "认证码"
+
+msgid "Autostart"
+msgstr "自启动"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Cannot overwrite a directory."
+msgstr "不能覆盖目录。"
+
+msgid "Content-Length is required."
+msgstr "必须提供 Content-Length。"
+
+msgid "Could not retrieve network info."
+msgstr "无法获取网络信息。"
+
+msgid "Generated auth code:\n%1"
+msgstr "已生成认证码：\n%1"
+
+msgid "Devtools"
+msgstr "开发工具"
+
+msgid "Devtools server"
+msgstr "Devtools 服务"
+
+msgid "Devtools server started.\n\nPort: %1\n%2"
+msgstr "Devtools 服务已启动。\n\n端口：%1\n%2"
+
+msgid "Devtools server stopped."
+msgstr "Devtools 服务已停止。"
+
+msgid "Devtools server: %1"
+msgstr "Devtools 服务: %1"
+
+msgid "Directory delete requires recursive=1."
+msgstr "删除目录需要 recursive=1。"
+
+msgid "Failed to allocate temporary file."
+msgstr "分配临时文件失败。"
+
+msgid "Failed to start Devtools server on port %1."
+msgstr "无法在端口 %1 启动 Devtools 服务。"
+
+msgid "File already exists."
+msgstr "文件已存在。"
+
+msgid "File not found."
+msgstr "文件不存在。"
+
+msgid "Invalid file name."
+msgstr "文件名无效。"
+
+msgid "Invalid path."
+msgstr "路径无效。"
+
+msgid "Not found."
+msgstr "未找到。"
+
+msgid "Parent folder not found."
+msgstr "上级目录不存在。"
+
+msgid "Path is required."
+msgstr "必须提供路径。"
+
+msgid "Path not found."
+msgstr "路径不存在。"
+
+msgid "Path traversal is not allowed."
+msgstr "不允许路径穿越。"
+
+msgid "Payload too large (max %1 bytes)."
+msgstr "载荷过大（最大 %1 字节）。"
+
+msgid "Port number (1-65535)"
+msgstr "端口号（1-65535）"
+
+msgid "Refusing to delete data root."
+msgstr "拒绝删除数据根目录。"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Set Devtools port"
+msgstr "设置 Devtools 端口"
+
+msgid "Set authentication code"
+msgstr "设置认证码"
+
+msgid "Start Devtools server"
+msgstr "启动 Devtools 服务"
+
+msgid "Target is not a directory."
+msgstr "目标不是目录。"
+
+msgid "Target is not a file."
+msgstr "目标不是文件。"
+
+msgid "Toggle Devtools server"
+msgstr "切换 Devtools 服务"
+
+msgid "Unauthorized."
+msgstr "未授权。"
+
+msgid "Unknown endpoint."
+msgstr "未知端点。"
