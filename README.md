@@ -39,24 +39,32 @@ Dispatcher actions:
 
 Routes:
 
-- `/logs` (default page)
-- `/files`
+- `/` (single split dashboard)
+- `/index.html` (single split dashboard)
 
-Logs page:
+Dashboard layout:
+
+- Left pane: logs.
+- Right pane: files.
+- Top-left controls (logs side): clear, previous/next segment, restart, stop service.
+- Top-right controls (files side): upload files/folder, refresh.
+- Bottom strip: repository link and theme switch.
+
+Logs pane:
 
 - Shows latest startup log segment by default.
 - Supports previous/next segment navigation.
 - Supports clearing log file.
-- Includes top-bar `Restart` button (immediate KOReader restart).
 
-Files page:
+Files pane:
 
 - Spreadsheet-like e-ink style file listing.
 - Breadcrumb path navigation (root shown as `🏠`).
+- Includes an explicit `..` parent-entry row for quick navigation to the upper folder.
 - Sort by name or modified time.
 - Multi-select with row checkboxes.
-- Upload files, upload folder, refresh, delete, download.
-- Includes top-bar `Restart` button (immediate KOReader restart).
+- Upload files, upload folder, refresh, move, delete, download.
+- Folder download is supported (served as `.tar` archive).
 
 Auth behavior:
 

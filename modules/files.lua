@@ -4,6 +4,7 @@ local util = require("util")
 local _ = require("gettext")
 
 local FilesModule = {}
+local TAR_BINARIES = { "tar", "gnutar", "/var/tmp/gnutar", "./tar" }
 
 local function parse_bool(v)
     if v == nil then
@@ -11,6 +12,22 @@ local function parse_bool(v)
     end
     v = tostring(v):lower()
     return v == "1" or v == "true" or v == "yes" or v == "on"
+end
+
+local function starts_with(str, prefix)
+    return str:sub(1, #prefix) == prefix
+end
+
+local function is_command_available(cmd)
+    if cmd:find("/", 1, true) then
+        local f = io.open(cmd, "rb")
+        if f then
+            f:close()
+            return true
+        end
+        return false
+    end
+    return os.execute(string.format("command -v %s >/dev/null 2>&1", cmd)) == 0
 end
 
 function FilesModule:new(plugin)
@@ -31,6 +48,8 @@ function FilesModule:handle(client, req, path, params)
         return self:handleUpload(client, req, params), true
     elseif req.method == "POST" and (path == "/api/files/mkdir" or path == "/api/sftp/mkdir") then
         return self:handleMkdir(client, params), true
+    elseif req.method == "POST" and (path == "/api/files/move" or path == "/api/sftp/move") then
+        return self:handleMove(client, params), true
     elseif req.method == "POST" and (path == "/api/files/delete" or path == "/api/sftp/delete") then
         return self:handleDelete(client, params), true
     end
@@ -144,6 +163,22 @@ function FilesModule:readRequestBodyToFile(client, content_length)
     return tmp_path
 end
 
+function FilesModule:allocateCachePath(prefix, suffix)
+    local cache_dir = ffiutil.joinPath(self.plugin.data_dir, "cache")
+    util.makePath(cache_dir)
+
+    local out_path
+    for _ = 1, 8 do
+        local name = string.format("%s-%d-%06d%s", prefix, os.time(), math.random(0, 999999), suffix or "")
+        out_path = ffiutil.joinPath(cache_dir, name)
+        if not util.pathExists(out_path) then
+            return out_path
+        end
+    end
+
+    return nil, _("Failed to allocate temporary file.")
+end
+
 function FilesModule:deleteDirectoryRecursive(dir_path)
     for name in lfs.dir(dir_path) do
         if name ~= "." and name ~= ".." then
@@ -170,6 +205,56 @@ function FilesModule:deleteDirectoryRecursive(dir_path)
         return nil, err
     end
     return true
+end
+
+function FilesModule:deletePath(path)
+    local sym_attr = lfs.symlinkattributes(path)
+    local mode = sym_attr and sym_attr.mode or nil
+
+    if mode == "directory" then
+        return self:deleteDirectoryRecursive(path)
+    end
+
+    local ok_remove, remove_err = os.remove(path)
+    if not ok_remove then
+        return nil, remove_err
+    end
+    return true
+end
+
+function FilesModule:detectTarBinary()
+    for _, tar_bin in ipairs(TAR_BINARIES) do
+        if is_command_available(tar_bin) then
+            return tar_bin
+        end
+    end
+    return nil
+end
+
+function FilesModule:createDirectoryArchive(dir_path)
+    local archive_path, path_err = self:allocateCachePath("devtools-archive", ".tar")
+    if not archive_path then
+        return nil, path_err
+    end
+
+    local tar_bin = self:detectTarBinary()
+    if not tar_bin then
+        os.remove(archive_path)
+        return nil, _("No tar utility available.")
+    end
+
+    local parent = ffiutil.dirname(dir_path)
+    local basename = ffiutil.basename(dir_path)
+    local tar_cmd = util.shell_escape({
+        tar_bin, "-cf", archive_path, "-C", parent, basename,
+    }) .. " >/dev/null 2>&1"
+
+    if os.execute(tar_cmd) ~= 0 then
+        os.remove(archive_path)
+        return nil, _("Failed to create directory archive.")
+    end
+
+    return archive_path, (basename or "folder") .. ".tar"
 end
 
 function FilesModule:createDirectorySecure(rel)
@@ -275,11 +360,26 @@ function FilesModule:handleDownload(client, params)
     end
 
     local attr = lfs.attributes(file_path)
-    if not attr or attr.mode ~= "file" then
-        return self.plugin:sendJSON(client, 400, { ok = false, error = _("Target is not a file.") })
+    if not attr then
+        return self.plugin:sendJSON(client, 404, { ok = false, error = _("Path not found.") })
     end
 
-    return self.plugin:sendFile(client, file_path, self.plugin.CTYPE.BINARY, ffiutil.basename(file_path))
+    if attr.mode == "file" then
+        return self.plugin:sendFile(client, file_path, self.plugin.CTYPE.BINARY, ffiutil.basename(file_path))
+    end
+
+    if attr.mode == "directory" then
+        local archive_path, archive_name_or_err = self:createDirectoryArchive(file_path)
+        if not archive_path then
+            return self.plugin:sendJSON(client, 500, { ok = false, error = archive_name_or_err })
+        end
+
+        local event = self.plugin:sendFile(client, archive_path, "application/x-tar", archive_name_or_err)
+        os.remove(archive_path)
+        return event
+    end
+
+    return self.plugin:sendJSON(client, 400, { ok = false, error = _("Target is not a file or directory.") })
 end
 
 function FilesModule:handleUpload(client, req, params)
@@ -351,6 +451,88 @@ function FilesModule:handleMkdir(client, params)
     end
 
     return self.plugin:sendJSON(client, code, { ok = false, error = err })
+end
+
+function FilesModule:handleMove(client, params)
+    local src_rel, src_err = self:sanitizeRelativePath(params.src, false)
+    if not src_rel then
+        return self.plugin:sendJSON(client, 400, { ok = false, error = src_err })
+    end
+
+    local dst_rel, dst_err = self:sanitizeRelativePath(params.dst, false)
+    if not dst_rel then
+        return self.plugin:sendJSON(client, 400, { ok = false, error = dst_err })
+    end
+
+    local src_path, src_code, src_path_err = self:resolveExistingPath(src_rel)
+    if not src_path then
+        return self.plugin:sendJSON(client, src_code, { ok = false, error = src_path_err })
+    end
+
+    if src_path == self.plugin.data_dir then
+        return self.plugin:sendJSON(client, 403, { ok = false, error = _("Refusing to move data root.") })
+    end
+
+    local dst_path, dst_code, dst_path_err = self:resolveTargetPath(dst_rel)
+    if not dst_path then
+        return self.plugin:sendJSON(client, dst_code, { ok = false, error = dst_path_err })
+    end
+
+    local src_sym = lfs.symlinkattributes(src_path)
+    local src_mode = src_sym and src_sym.mode or nil
+
+    local dst_sym = lfs.symlinkattributes(dst_path)
+    local dst_mode = dst_sym and dst_sym.mode or nil
+
+    local final_dst_path = dst_path
+    local final_dst_rel = dst_rel
+    if dst_mode == "directory" then
+        local src_basename = ffiutil.basename(src_path)
+        final_dst_path = ffiutil.joinPath(dst_path, src_basename)
+        final_dst_rel = dst_rel .. "/" .. src_basename
+        dst_sym = lfs.symlinkattributes(final_dst_path)
+        dst_mode = dst_sym and dst_sym.mode or nil
+    end
+
+    if src_path == final_dst_path then
+        return self.plugin:sendJSON(client, 200, {
+            ok = true,
+            source = src_rel,
+            target = final_dst_rel,
+            moved = false,
+        })
+    end
+
+    if src_mode == "directory" and (final_dst_path == src_path or starts_with(final_dst_path, src_path .. "/")) then
+        return self.plugin:sendJSON(client, 400, { ok = false, error = _("Cannot move a directory into itself.") })
+    end
+
+    local overwrite = parse_bool(params.overwrite)
+    if dst_mode and not overwrite then
+        return self.plugin:sendJSON(client, 409, { ok = false, error = _("Target already exists.") })
+    end
+
+    if dst_mode and overwrite then
+        if final_dst_path == self.plugin.data_dir then
+            return self.plugin:sendJSON(client, 403, { ok = false, error = _("Access denied.") })
+        end
+        local ok_remove, remove_err = self:deletePath(final_dst_path)
+        if not ok_remove then
+            return self.plugin:sendJSON(client, 500, { ok = false, error = tostring(remove_err) })
+        end
+    end
+
+    local ok_rename, rename_err = os.rename(src_path, final_dst_path)
+    if not ok_rename then
+        return self.plugin:sendJSON(client, 500, { ok = false, error = tostring(rename_err) })
+    end
+
+    return self.plugin:sendJSON(client, 200, {
+        ok = true,
+        source = src_rel,
+        target = final_dst_rel,
+        moved = true,
+    })
 end
 
 function FilesModule:handleDelete(client, params)

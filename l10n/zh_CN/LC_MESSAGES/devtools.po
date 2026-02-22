@@ -25,6 +25,9 @@ msgstr "取消"
 msgid "Cannot overwrite a directory."
 msgstr "不能覆盖目录。"
 
+msgid "Cannot move a directory into itself."
+msgstr "不能将目录移动到其自身内部。"
+
 msgid "Content-Length is required."
 msgstr "必须提供 Content-Length。"
 
@@ -54,6 +57,9 @@ msgstr "删除目录需要 recursive=1。"
 
 msgid "Failed to allocate temporary file."
 msgstr "分配临时文件失败。"
+
+msgid "Failed to create directory archive."
+msgstr "创建目录归档失败。"
 
 msgid "Failed to start Devtools server on port %1."
 msgstr "无法在端口 %1 启动 Devtools 服务。"
@@ -94,6 +100,9 @@ msgstr "端口号（1-65535）"
 msgid "Refusing to delete data root."
 msgstr "拒绝删除数据根目录。"
 
+msgid "Refusing to move data root."
+msgstr "拒绝移动数据根目录。"
+
 msgid "Save"
 msgstr "保存"
 
@@ -109,11 +118,20 @@ msgstr "目标不是目录。"
 msgid "Target is not a file."
 msgstr "目标不是文件。"
 
+msgid "Target is not a file or directory."
+msgstr "目标既不是文件也不是目录。"
+
+msgid "Target already exists."
+msgstr "目标已存在。"
+
 msgid "Toggle Devtools server"
 msgstr "切换 Devtools 服务"
 
 msgid "Unauthorized."
 msgstr "未授权。"
+
+msgid "No tar utility available."
+msgstr "系统中没有可用的 tar 工具。"
 
 msgid "Unknown endpoint."
 msgstr "未知端点。"

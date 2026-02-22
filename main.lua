@@ -468,15 +468,9 @@ end
 
 function Devtools:serveStatic(client, route)
     local map = {
-        ["/"] = { file = "logs.html", ctype = CTYPE.HTML },
-        ["/index.html"] = { file = "logs.html", ctype = CTYPE.HTML },
-        ["/files"] = { file = "files.html", ctype = CTYPE.HTML },
-        ["/files.html"] = { file = "files.html", ctype = CTYPE.HTML },
-        ["/logs"] = { file = "logs.html", ctype = CTYPE.HTML },
-        ["/logs.html"] = { file = "logs.html", ctype = CTYPE.HTML },
-        ["/files.js"] = { file = "files.js", ctype = CTYPE.JS },
-        ["/logs.js"] = { file = "logs.js", ctype = CTYPE.JS },
-        ["/app.js"] = { file = "files.js", ctype = CTYPE.JS },
+        ["/"] = { file = "index.html", ctype = CTYPE.HTML },
+        ["/index.html"] = { file = "index.html", ctype = CTYPE.HTML },
+        ["/app.js"] = { file = "app.js", ctype = CTYPE.JS },
         ["/style.css"] = { file = "style.css", ctype = CTYPE.CSS },
     }
 
@@ -514,6 +508,20 @@ function Devtools:handleRestart(client)
     return event
 end
 
+function Devtools:handleStopService(client)
+    local was_running = self:isRunning()
+    local event = self:sendJSON(client, 200, {
+        ok = true,
+        stopped = was_running,
+    })
+    UIManager:nextTick(function()
+        if self:isRunning() then
+            self:stop(false, false)
+        end
+    end)
+    return event
+end
+
 function Devtools:onRequest(req, client)
     local path, params = self:parseRequestURI(req.uri)
 
@@ -534,6 +542,10 @@ function Devtools:onRequest(req, client)
 
     if req.method == "POST" and path == "/api/system/restart" then
         return self:handleRestart(client)
+    end
+
+    if req.method == "POST" and path == "/api/system/stop" then
+        return self:handleStopService(client)
     end
 
     local event, handled = self.files_module:handle(client, req, path, params)

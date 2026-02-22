@@ -3,9 +3,106 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Logs</title>
-  <meta http-equiv="refresh" content="0;url=/logs">
+  <title>Devtools Dashboard</title>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+  <main class="app-shell split-shell">
+    <header class="top-split">
+      <div class="top-zone top-zone-left">
+        <nav class="sheet-tabs" aria-label="Logs section">
+          <button id="tab-logs" class="sheet-tab active" type="button">Logs</button>
+        </nav>
+        <div class="top-actions top-actions-log">
+          <button id="btn-clear-log" class="action-btn" type="button">Clear</button>
+          <button id="btn-prev-segment" class="action-btn" type="button">Prev</button>
+          <button id="btn-next-segment" class="action-btn" type="button">Next</button>
+          <button id="btn-restart" class="action-btn" type="button">Restart</button>
+          <button id="btn-stop-service" class="action-btn" type="button">Stop service</button>
+        </div>
+      </div>
+
+      <div class="top-zone top-zone-right">
+        <nav class="sheet-tabs" aria-label="Files section">
+          <button id="tab-files" class="sheet-tab active" type="button">Files</button>
+        </nav>
+        <div class="top-actions top-actions-file">
+          <button id="btn-upload-files" class="action-btn" type="button">Upload files</button>
+          <button id="btn-upload-folder" class="action-btn" type="button">Upload folder</button>
+          <button id="btn-refresh" class="action-btn" type="button">Refresh</button>
+        </div>
+      </div>
+    </header>
+
+    <section class="workspace-split" aria-label="Devtools dashboard">
+      <section class="workspace-pane pane-logs" aria-label="Real-time log diagnostics">
+        <pre id="log-output" class="log-output" aria-live="polite"></pre>
+      </section>
+
+      <section class="workspace-pane pane-files" aria-label="Remote file management">
+        <div class="pane-strip">
+          <nav id="path-crumbs" class="path-crumbs" aria-label="Path breadcrumbs"></nav>
+        </div>
+        <div id="file-dropzone" class="sheet-table-wrap file-dropzone">
+          <table class="sheet-table" id="remote-table">
+            <thead>
+              <tr>
+                <th class="col-check"><input id="check-all" type="checkbox" aria-label="Select all"></th>
+                <th id="th-name" class="sortable" role="button" tabindex="0">Name</th>
+                <th id="th-modified" class="sortable" role="button" tabindex="0">Modified</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <footer class="bottom-strip" aria-label="Project and theme controls">
+      <p class="repo-note">
+        <span id="repo-label">Powered by</span>
+        <a
+          class="repo-link"
+          href="https://github.com/ZHA30/devtools.koplugin"
+          target="_blank"
+          rel="noopener noreferrer"
+        >ZHA30/devtools.koplugin</a>
+        <span class="footer-sep" aria-hidden="true">|</span>
+        <button id="theme-toggle" class="theme-toggle bottom-theme-toggle" type="button">主题：☼</button>
+      </p>
+    </footer>
+  </main>
+
+  <input id="upload-input" class="visually-hidden" type="file" multiple>
+  <input id="upload-folder-input" class="visually-hidden" type="file" multiple webkitdirectory directory>
+
+  <section id="file-context-menu" class="context-menu hidden" role="menu" aria-label="File actions"></section>
+
+  <section id="upload-progress" class="upload-progress hidden" aria-live="polite" aria-atomic="true">
+    <div class="upload-progress-card">
+      <h2 id="upload-progress-title">Uploading files</h2>
+      <p id="upload-progress-meta">File 0/0 · 0 B/0 B</p>
+      <p id="upload-progress-current">Waiting...</p>
+      <div id="upload-progress-track" class="upload-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div id="upload-progress-bar" class="upload-progress-bar"></div>
+      </div>
+      <p id="upload-progress-percent">0%</p>
+    </div>
+  </section>
+
+  <section id="auth-modal" class="auth-modal hidden" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+    <div class="auth-card">
+      <h2 id="auth-title">Authentication required</h2>
+      <p id="auth-message">Enter authentication code to continue.</p>
+      <input id="auth-code" type="password" placeholder="Authentication code" autocomplete="one-time-code">
+      <p id="auth-error" class="auth-error"></p>
+      <div class="auth-actions">
+        <button id="btn-auth-cancel" type="button">Cancel</button>
+        <button id="btn-auth-submit" class="primary" type="button">Unlock</button>
+      </div>
+    </div>
+  </section>
+
+  <script src="/app.js"></script>
 </body>
 </html>

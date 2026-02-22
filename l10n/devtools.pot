@@ -23,6 +23,9 @@ msgstr ""
 msgid "Cannot overwrite a directory."
 msgstr ""
 
+msgid "Cannot move a directory into itself."
+msgstr ""
+
 msgid "Content-Length is required."
 msgstr ""
 
@@ -51,6 +54,9 @@ msgid "Directory delete requires recursive=1."
 msgstr ""
 
 msgid "Failed to allocate temporary file."
+msgstr ""
+
+msgid "Failed to create directory archive."
 msgstr ""
 
 msgid "Failed to start Devtools server on port %1."
@@ -92,6 +98,9 @@ msgstr ""
 msgid "Refusing to delete data root."
 msgstr ""
 
+msgid "Refusing to move data root."
+msgstr ""
+
 msgid "Save"
 msgstr ""
 
@@ -107,10 +116,19 @@ msgstr ""
 msgid "Target is not a file."
 msgstr ""
 
+msgid "Target is not a file or directory."
+msgstr ""
+
+msgid "Target already exists."
+msgstr ""
+
 msgid "Toggle Devtools server"
 msgstr ""
 
 msgid "Unauthorized."
+msgstr ""
+
+msgid "No tar utility available."
 msgstr ""
 
 msgid "Unknown endpoint."
