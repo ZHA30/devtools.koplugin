@@ -5,6 +5,8 @@
   const THEME_STORAGE_KEY = "devtools_theme_mode";
   const MAX_LINES = 5000;
   const POLL_INTERVAL_MS = 1000;
+  const HEALTH_CHECK_INTERVAL_MS = 1200;
+  const RECONNECT_MAX_ATTEMPTS = 40;
 
   const messages = {
     en: {
@@ -53,6 +55,18 @@
       error_restart: "Restart failed: %1",
       error_stop_service: "Stop service failed: %1",
       error_clear: "Clear log failed: %1",
+      success_clear: "Log cleared.",
+      success_refresh: "Refreshed.",
+      success_restart: "Restart requested. KOReader is restarting...",
+      success_stop_service: "Stop request sent. Devtools service is shutting down.",
+      pending_restart: "Sending restart request...",
+      pending_stop_service: "Sending stop request...",
+      reconnecting: "Reconnecting...",
+      status_online: "Online",
+      status_reconnecting: "Reconnecting...",
+      status_offline: "Offline",
+      success_reconnected: "Reconnected successfully.",
+      error_reconnect_timeout: "Reconnection timed out.",
       error_sessions: "Load sessions failed: %1",
       error_poll: "Load logs failed: %1",
       error_select_file: "Select at least one file.",
@@ -116,6 +130,18 @@
       error_restart: "重启失败：%1",
       error_stop_service: "关闭服务失败：%1",
       error_clear: "清空日志失败：%1",
+      success_clear: "日志已清空。",
+      success_refresh: "已刷新。",
+      success_restart: "已发送重启请求，KOReader 正在重启。",
+      success_stop_service: "已发送关闭请求，Devtools 服务正在停止。",
+      pending_restart: "正在发送重启请求...",
+      pending_stop_service: "正在发送关闭请求...",
+      reconnecting: "重连中...",
+      status_online: "在线",
+      status_reconnecting: "重连中...",
+      status_offline: "离线",
+      success_reconnected: "重连成功。",
+      error_reconnect_timeout: "重连超时。",
       error_sessions: "加载日志分段失败：%1",
       error_poll: "读取日志失败：%1",
       error_select_file: "请至少选择一个文件。",
@@ -153,6 +179,7 @@
     authCode: window.localStorage.getItem(AUTH_STORAGE_KEY) || "",
     theme: window.localStorage.getItem(THEME_STORAGE_KEY)
       || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"),
+    serviceState: "reconnecting",
     path: "",
     entries: [],
     selectedPaths: new Set(),
@@ -165,6 +192,7 @@
     lines: [],
     polling: false,
     pollTimer: null,
+    healthCheckTimer: null,
     isUploading: false,
     uploadProgress: createUploadProgressState(),
   };
@@ -173,6 +201,9 @@
     tabLogs: document.querySelector("#tab-logs"),
     tabFiles: document.querySelector("#tab-files"),
     repoLabel: document.querySelector("#repo-label"),
+    serviceStatus: document.querySelector("#service-status"),
+    serviceStatusIcon: document.querySelector("#service-status-icon"),
+    serviceStatusText: document.querySelector("#service-status-text"),
     themeToggle: document.querySelector("#theme-toggle"),
     uploadFilesBtn: document.querySelector("#btn-upload-files"),
     uploadFolderBtn: document.querySelector("#btn-upload-folder"),
@@ -206,10 +237,13 @@
     uploadProgressTrack: document.querySelector("#upload-progress-track"),
     uploadProgressBar: document.querySelector("#upload-progress-bar"),
     uploadProgressPercent: document.querySelector("#upload-progress-percent"),
+    toast: document.querySelector("#toast"),
   };
 
   let authResolver = null;
   let authPromise = null;
+  let toastTimer = null;
+  let reconnectingRunId = 0;
 
   function t(key, ...args) {
     const table = messages[state.lang] || messages.en;
@@ -233,6 +267,122 @@
     els.themeToggle.textContent = state.theme === "dark" ? t("theme_dark") : t("theme_light");
   }
 
+  function setServiceState(nextState) {
+    const normalized = nextState === "online" || nextState === "offline" ? nextState : "reconnecting";
+    state.serviceState = normalized;
+
+    if (!els.serviceStatus) {
+      return;
+    }
+
+    els.serviceStatus.classList.remove("is-online", "is-offline", "is-reconnecting");
+
+    if (normalized === "online") {
+      els.serviceStatus.classList.add("is-online");
+      if (els.serviceStatusIcon) {
+        els.serviceStatusIcon.textContent = "🟢";
+      }
+      if (els.serviceStatusText) {
+        els.serviceStatusText.textContent = t("status_online");
+      }
+      return;
+    }
+
+    if (normalized === "offline") {
+      els.serviceStatus.classList.add("is-offline");
+      if (els.serviceStatusIcon) {
+        els.serviceStatusIcon.textContent = "🔴";
+      }
+      if (els.serviceStatusText) {
+        els.serviceStatusText.textContent = t("status_offline");
+      }
+      return;
+    }
+
+    els.serviceStatus.classList.add("is-reconnecting");
+    if (els.serviceStatusIcon) {
+      els.serviceStatusIcon.textContent = "🟡";
+    }
+    if (els.serviceStatusText) {
+      els.serviceStatusText.textContent = t("status_reconnecting");
+    }
+  }
+
+  function stopHealthCheckLoop() {
+    if (state.healthCheckTimer) {
+      window.clearTimeout(state.healthCheckTimer);
+      state.healthCheckTimer = null;
+    }
+  }
+
+  function scheduleHealthCheck(delayMs) {
+    stopHealthCheckLoop();
+    state.healthCheckTimer = window.setTimeout(() => {
+      void probeServiceHealth();
+    }, Math.max(0, Number(delayMs || HEALTH_CHECK_INTERVAL_MS)));
+  }
+
+  async function probeServiceHealth() {
+    try {
+      const response = await apiFetch("/api/health");
+      if (!response.ok) {
+        setServiceState("offline");
+      } else {
+        const data = await response.json().catch(() => ({ ok: false }));
+        if (data && data.ok && data.running) {
+          setServiceState("online");
+        } else {
+          setServiceState("offline");
+        }
+      }
+    } catch (_err) {
+      setServiceState("offline");
+    }
+
+    scheduleHealthCheck(HEALTH_CHECK_INTERVAL_MS);
+  }
+
+  async function waitForReconnected() {
+    reconnectingRunId += 1;
+    const runId = reconnectingRunId;
+
+    setServiceState("reconnecting");
+
+    for (let i = 0; i < RECONNECT_MAX_ATTEMPTS; i += 1) {
+      if (runId !== reconnectingRunId) {
+        return false;
+      }
+
+      try {
+        const response = await apiFetch("/api/health");
+        if (response.ok) {
+          const data = await response.json().catch(() => ({ ok: false }));
+          if (data && data.ok && data.running) {
+            if (runId !== reconnectingRunId) {
+              return false;
+            }
+            setServiceState("online");
+            showToast(t("success_reconnected"), "success", 2200);
+            scheduleHealthCheck(HEALTH_CHECK_INTERVAL_MS);
+            return true;
+          }
+        }
+      } catch (_err) {
+      }
+
+      await new Promise((resolve) => {
+        window.setTimeout(resolve, HEALTH_CHECK_INTERVAL_MS);
+      });
+    }
+
+    if (runId === reconnectingRunId) {
+      setServiceState("offline");
+      notifyError(t("error_reconnect_timeout"));
+      scheduleHealthCheck(HEALTH_CHECK_INTERVAL_MS);
+    }
+    return false;
+  }
+
   function updateSortHeaders() {
     const nameArrow = state.sortKey === "name" ? (state.sortDir === "asc" ? " ↑" : " ↓") : "";
     const modArrow = state.sortKey === "mtime" ? (state.sortDir === "asc" ? " ↑" : " ↓") : "";
@@ -247,6 +397,7 @@
     if (els.repoLabel) {
       els.repoLabel.textContent = t("repo_label");
     }
+    setServiceState(state.serviceState);
     els.uploadFilesBtn.textContent = t("btn_upload_files");
     els.uploadFolderBtn.textContent = t("btn_upload_folder");
     els.refreshBtn.textContent = t("btn_refresh");
@@ -457,7 +608,33 @@
   }
 
   function notifyError(message) {
-    window.alert(message);
+    showToast(message, "error", 2600);
+  }
+
+  function showToast(message, type, durationMs) {
+    if (!els.toast) {
+      return;
+    }
+
+    if (toastTimer) {
+      window.clearTimeout(toastTimer);
+      toastTimer = null;
+    }
+
+    els.toast.textContent = String(message || "");
+    els.toast.classList.remove("hidden", "toast-success", "toast-error", "toast-info");
+
+    const tone = type === "success" ? "toast-success" : (type === "error" ? "toast-error" : "toast-info");
+    els.toast.classList.add(tone);
+
+    const timeout = Number(durationMs || 1800);
+    if (timeout > 0) {
+      toastTimer = window.setTimeout(() => {
+        els.toast.classList.add("hidden");
+        els.toast.classList.remove("toast-success", "toast-error", "toast-info");
+        toastTimer = null;
+      }, timeout);
+    }
   }
 
   function encodePath(path) {
@@ -824,6 +1001,7 @@
     }
 
     await loadSegment(state.sessions.length - 1);
+    showToast(t("success_clear"), "success", 1600);
   }
 
   function parseJSONSafe(raw) {
@@ -1378,34 +1556,50 @@
   }
 
   async function restartKOReader() {
+    stopHealthCheckLoop();
+    setServiceState("reconnecting");
+    showToast(t("pending_restart"), "info", 0);
     try {
       const response = await apiFetch("/api/system/restart", {
         method: "POST",
       });
       if (response.ok) {
+        showToast(t("reconnecting"), "info", 0);
+        void waitForReconnected();
         return;
       }
 
+      setServiceState("offline");
+      scheduleHealthCheck(HEALTH_CHECK_INTERVAL_MS);
       const data = await response.json().catch(() => ({ ok: false, error: "invalid_json" }));
       notifyError(t("error_restart", data.error || response.status));
     } catch (err) {
+      setServiceState("offline");
+      scheduleHealthCheck(HEALTH_CHECK_INTERVAL_MS);
       const message = (err && err.message) ? err.message : err;
       notifyError(t("error_restart", message || "network"));
     }
   }
 
   async function stopDevtoolsService() {
+    reconnectingRunId += 1;
+    stopHealthCheckLoop();
+    showToast(t("pending_stop_service"), "info", 0);
     try {
       const response = await apiFetch("/api/system/stop", {
         method: "POST",
       });
       if (response.ok) {
+        setServiceState("offline");
+        showToast(t("success_stop_service"), "success", 3800);
         return;
       }
 
+      scheduleHealthCheck(HEALTH_CHECK_INTERVAL_MS);
       const data = await response.json().catch(() => ({ ok: false, error: "invalid_json" }));
       notifyError(t("error_stop_service", data.error || response.status));
     } catch (err) {
+      scheduleHealthCheck(HEALTH_CHECK_INTERVAL_MS);
       const message = (err && err.message) ? err.message : err;
       notifyError(t("error_stop_service", message || "network"));
     }
@@ -1596,7 +1790,10 @@
     });
 
     els.refreshBtn.addEventListener("click", async () => {
-      await loadRemote(state.path);
+      const ok = await loadRemote(state.path);
+      if (ok) {
+        showToast(t("success_refresh"), "success", 1200);
+      }
     });
 
     els.restartBtn.addEventListener("click", restartKOReader);
@@ -1660,9 +1857,15 @@
 
     window.addEventListener("resize", closeContextMenu);
     window.addEventListener("beforeunload", () => {
+      reconnectingRunId += 1;
       if (state.pollTimer) {
         window.clearTimeout(state.pollTimer);
         state.pollTimer = null;
+      }
+      stopHealthCheckLoop();
+      if (toastTimer) {
+        window.clearTimeout(toastTimer);
+        toastTimer = null;
       }
     });
   }
@@ -1678,6 +1881,8 @@
     renderRows();
     renderLog(true);
     updatePagerButtons();
+
+    await probeServiceHealth();
 
     const [, sessionsOk] = await Promise.all([
       loadRemote(""),

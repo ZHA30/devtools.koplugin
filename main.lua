@@ -43,6 +43,9 @@ local CTYPE = {
 }
 
 local should_run = nil
+local DEFAULT_IDLE_STOP_MINUTES = 15
+local MIN_IDLE_STOP_MINUTES = 1
+local MAX_IDLE_STOP_MINUTES = 1440
 
 local Devtools = WidgetContainer:extend{
     name = "devtools",
@@ -64,6 +67,16 @@ end
 
 local function starts_with(str, prefix)
     return str:sub(1, #prefix) == prefix
+end
+
+function Devtools:normalizeIdleStopMinutes(value)
+    local minutes = math.floor(tonumber(value) or DEFAULT_IDLE_STOP_MINUTES)
+    if minutes < MIN_IDLE_STOP_MINUTES then
+        minutes = MIN_IDLE_STOP_MINUTES
+    elseif minutes > MAX_IDLE_STOP_MINUTES then
+        minutes = MAX_IDLE_STOP_MINUTES
+    end
+    return minutes
 end
 
 function Devtools:setupPluginLocalization()
@@ -105,6 +118,11 @@ function Devtools:init()
 
     self.port = tonumber(self.settings:readSetting("port")) or 18080
     self.autostart = self.settings:isTrue("autostart")
+    self.idle_stop_enabled = self.settings:isTrue("idle_stop_enabled")
+    self.idle_stop_minutes = self:normalizeIdleStopMinutes(self.settings:readSetting("idle_stop_minutes"))
+    self.idle_stop_task = function()
+        self:onIdleStopTimeout()
+    end
     self.auth_enabled = self.settings:isTrue("auth_enabled")
     self.auth_code = self.settings:readSetting("auth_code") or ""
     self.upload_max_bytes = tonumber(self.settings:readSetting("upload_max_bytes")) or (64 * 1024 * 1024)
@@ -132,6 +150,10 @@ function Devtools:init()
         UIManager:nextTick(function()
             self:start(true)
         end)
+    end
+
+    if UIManager.event_hook then
+        UIManager.event_hook:registerWidget("InputEvent", self)
     end
 
     self.ui.menu:registerToMainMenu(self)
@@ -240,6 +262,7 @@ function Devtools:start(silent)
     self.http_messagequeue = UIManager:insertZMQ(server)
     self:openKindleFirewall()
     self:setShouldRun(true)
+    self:scheduleIdleStopTimer()
 
     logger.info("Devtools: server started on port", self.port)
     if not silent then
@@ -269,6 +292,7 @@ function Devtools:stop(silent, keep_should_run)
     end
 
     self:closeKindleFirewall()
+    self:cancelIdleStopTimer()
 
     if not silent then
         UIManager:show(InfoMessage:new{
@@ -317,6 +341,8 @@ end
 function Devtools:onCloseWidget()
     if self:isRunning() then
         self:stop(true, true)
+    else
+        self:cancelIdleStopTimer()
     end
 end
 
@@ -606,6 +632,45 @@ function Devtools:showPortDialog(touchmenu_instance)
     dialog:onShowKeyboard()
 end
 
+function Devtools:showIdleStopDialog(touchmenu_instance)
+    local dialog
+    dialog = InputDialog:new{
+        title = _("Set idle shutdown timeout"),
+        input = tostring(self.idle_stop_minutes),
+        input_type = "number",
+        input_hint = _("Idle minutes (1-1440)"),
+        buttons = {
+            {
+                {
+                    text = _("Cancel"),
+                    id = "close",
+                    callback = function()
+                        UIManager:close(dialog)
+                    end,
+                },
+                {
+                    text = _("Save"),
+                    is_enter_default = true,
+                    callback = function()
+                        local value = tonumber(dialog:getInputText())
+                        if value then
+                            self.idle_stop_minutes = self:normalizeIdleStopMinutes(value)
+                            self:saveSetting("idle_stop_minutes", self.idle_stop_minutes)
+                            if self.idle_stop_enabled and self:isRunning() then
+                                self:scheduleIdleStopTimer()
+                            end
+                            UIManager:close(dialog)
+                            touchmenu_instance:updateItems()
+                        end
+                    end,
+                },
+            },
+        },
+    }
+    UIManager:show(dialog)
+    dialog:onShowKeyboard()
+end
+
 function Devtools:showAuthCodeDialog(touchmenu_instance)
     local dialog
     dialog = InputDialog:new{
@@ -658,6 +723,55 @@ function Devtools:toggleAutostart(touchmenu_instance)
     touchmenu_instance:updateItems()
 end
 
+function Devtools:idleStopDelaySeconds()
+    return self.idle_stop_minutes * 60
+end
+
+function Devtools:cancelIdleStopTimer()
+    if self.idle_stop_task then
+        UIManager:unschedule(self.idle_stop_task)
+    end
+end
+
+function Devtools:scheduleIdleStopTimer()
+    self:cancelIdleStopTimer()
+    if not self.idle_stop_enabled or not self:isRunning() then
+        return
+    end
+    UIManager:scheduleIn(self:idleStopDelaySeconds(), self.idle_stop_task)
+end
+
+function Devtools:onIdleStopTimeout()
+    if not self.idle_stop_enabled or not self:isRunning() then
+        return
+    end
+
+    self:stop(true, false)
+    UIManager:show(InfoMessage:new{
+        timeout = 4,
+        text = T(_("Devtools server stopped after %1 minutes of inactivity."), self.idle_stop_minutes),
+    })
+end
+
+function Devtools:onInputEvent()
+    if self.idle_stop_enabled and self:isRunning() then
+        self:scheduleIdleStopTimer()
+    end
+end
+
+function Devtools:toggleIdleStop(touchmenu_instance)
+    self.idle_stop_enabled = not self.idle_stop_enabled
+    self:saveSetting("idle_stop_enabled", self.idle_stop_enabled)
+
+    if self.idle_stop_enabled then
+        self:scheduleIdleStopTimer()
+    else
+        self:cancelIdleStopTimer()
+    end
+
+    touchmenu_instance:updateItems()
+end
+
 function Devtools:onToggleDevtoolsServer()
     if self:isRunning() then
         self:stop(false, false)
@@ -668,51 +782,66 @@ end
 
 function Devtools:addToMainMenu(menu_items)
     menu_items.devtools = {
-        text = _("Devtools"),
+        text_func = function()
+            if self:isRunning() then
+                return T(_("Devtools: %1"), self.port)
+            end
+            return _("Devtools")
+        end,
+        checked_func = function()
+            return self:isRunning()
+        end,
         sorting_hint = "more_tools",
-        sub_item_table = {
-            {
-                text_func = function()
-                    if self:isRunning() then
-                        return T(_("Devtools server: %1"), self.port)
-                    end
-                    return _("Devtools server")
-                end,
-                checked_func = function()
-                    return self:isRunning()
-                end,
-                check_callback_updates_menu = true,
-                callback = function(touchmenu_instance)
-                    self:onToggleDevtoolsServer()
-                    ffiutil.sleep(0.3)
-                    touchmenu_instance:updateItems()
-                end,
-                hold_callback = function(touchmenu_instance)
-                    self:showPortDialog(touchmenu_instance)
-                end,
-            },
-            {
-                text = _("Autostart"),
-                checked_func = function()
-                    return self.autostart
-                end,
-                callback = function(touchmenu_instance)
-                    self:toggleAutostart(touchmenu_instance)
-                end,
-            },
-            {
-                text = _("Authentication"),
-                checked_func = function()
-                    return self.auth_enabled
-                end,
-                callback = function(touchmenu_instance)
-                    self:toggleAuth(touchmenu_instance)
-                end,
-                hold_callback = function(touchmenu_instance)
-                    self:showAuthCodeDialog(touchmenu_instance)
-                end,
-            },
-        },
+        hold_callback = function(touchmenu_instance)
+            self:onToggleDevtoolsServer()
+            ffiutil.sleep(0.3)
+            touchmenu_instance:updateItems()
+        end,
+        sub_item_table_func = function()
+            return {
+                {
+                    text = _("Port") .. ": " .. tostring(self.port),
+                    callback = function(touchmenu_instance)
+                        self:showPortDialog(touchmenu_instance)
+                    end,
+                },
+                {
+                    text = _("Autostart"),
+                    checked_func = function()
+                        return self.autostart
+                    end,
+                    callback = function(touchmenu_instance)
+                        self:toggleAutostart(touchmenu_instance)
+                    end,
+                },
+                {
+                    text_func = function()
+                        return T(_("Stop when idle: %1 min"), self.idle_stop_minutes)
+                    end,
+                    checked_func = function()
+                        return self.idle_stop_enabled
+                    end,
+                    callback = function(touchmenu_instance)
+                        self:toggleIdleStop(touchmenu_instance)
+                    end,
+                    hold_callback = function(touchmenu_instance)
+                        self:showIdleStopDialog(touchmenu_instance)
+                    end,
+                },
+                {
+                    text = _("Authentication"),
+                    checked_func = function()
+                        return self.auth_enabled
+                    end,
+                    callback = function(touchmenu_instance)
+                        self:toggleAuth(touchmenu_instance)
+                    end,
+                    hold_callback = function(touchmenu_instance)
+                        self:showAuthCodeDialog(touchmenu_instance)
+                    end,
+                },
+            }
+        end,
     }
 end
 

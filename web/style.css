@@ -13,6 +13,9 @@
   --danger: #b33232;
   --danger-hover: #8f2626;
   --danger-text: #ffffff;
+  --status-online: #1f8f46;
+  --status-reconnecting: #b48a17;
+  --status-offline: #b33232;
   --overlay: rgba(0, 0, 0, 0.45);
 }
 
@@ -31,6 +34,9 @@ body.theme-dark {
   --danger: #e06060;
   --danger-hover: #f07878;
   --danger-text: #101010;
+  --status-online: #5fd588;
+  --status-reconnecting: #f1c85b;
+  --status-offline: #f07979;
   --overlay: rgba(0, 0, 0, 0.65);
 }
 
@@ -223,16 +229,44 @@ select {
 
 .bottom-strip {
   min-width: 0;
-  padding: 0;
-  display: flex;
+  min-height: 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: center;
-  min-height: 20px;
+  column-gap: 8px;
+}
+
+.service-status {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.service-status .status-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.service-status.is-online {
+  color: var(--status-online);
+}
+
+.service-status.is-reconnecting {
+  color: var(--status-reconnecting);
+}
+
+.service-status.is-offline {
+  color: var(--status-offline);
 }
 
 .repo-note {
   margin: 0;
-  display: flex;
+  justify-self: center;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
@@ -252,8 +286,8 @@ select {
   text-decoration: underline;
 }
 
-.footer-sep {
-  color: var(--line-soft);
+.footer-theme-wrap {
+  justify-self: end;
 }
 
 .bottom-theme-toggle {
@@ -530,6 +564,40 @@ select {
   font-size: 12px;
 }
 
+.toast {
+  position: fixed;
+  z-index: 50;
+  left: 50%;
+  bottom: 74px;
+  transform: translateX(-50%);
+  min-width: min(560px, calc(100vw - 24px));
+  max-width: min(640px, calc(100vw - 24px));
+  padding: 10px 12px;
+  border: 2px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  font-size: 13px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.toast.hidden {
+  display: none;
+}
+
+.toast.toast-success {
+  border-color: color-mix(in srgb, var(--service) 75%, var(--line) 25%);
+}
+
+.toast.toast-error {
+  border-color: color-mix(in srgb, var(--danger) 75%, var(--line) 25%);
+}
+
+.toast.toast-info {
+  border-color: color-mix(in srgb, var(--line-soft) 75%, var(--line) 25%);
+}
+
 .upload-progress-track {
   height: 12px;
   border: 1px solid var(--line-soft);
@@ -667,8 +735,14 @@ select {
   }
 
   .bottom-strip {
-    padding: 0;
     min-height: 18px;
+    column-gap: 6px;
+  }
+
+  .service-status,
+  .repo-note,
+  .bottom-theme-toggle {
+    font-size: 10px;
   }
 
   .workspace-frame {

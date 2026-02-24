@@ -40,17 +40,16 @@ msgstr "已生成认证码：\n%1"
 msgid "Devtools"
 msgstr "开发工具"
 
-msgid "Devtools server"
-msgstr "Devtools 服务"
+msgid "Devtools: %1"
+msgstr "开发工具：%1"
 
-msgid "Devtools server started.\n\nPort: %1\n%2"
-msgstr "Devtools 服务已启动。\n\n端口：%1\n%2"
+msgid "Devtools server"
+msgstr "开发工具服务"
+
 
 msgid "Devtools server stopped."
-msgstr "Devtools 服务已停止。"
+msgstr "开发工具服务已停止。"
 
-msgid "Devtools server: %1"
-msgstr "Devtools 服务: %1"
 
 msgid "Directory delete requires recursive=1."
 msgstr "删除目录需要 recursive=1。"
@@ -62,7 +61,7 @@ msgid "Failed to create directory archive."
 msgstr "创建目录归档失败。"
 
 msgid "Failed to start Devtools server on port %1."
-msgstr "无法在端口 %1 启动 Devtools 服务。"
+msgstr "无法在端口 %1 启动开发工具服务。"
 
 msgid "File already exists."
 msgstr "文件已存在。"
@@ -94,6 +93,9 @@ msgstr "不允许路径穿越。"
 msgid "Payload too large (max %1 bytes)."
 msgstr "载荷过大（最大 %1 字节）。"
 
+msgid "Port"
+msgstr "端口"
+
 msgid "Port number (1-65535)"
 msgstr "端口号（1-65535）"
 
@@ -108,6 +110,18 @@ msgstr "保存"
 
 msgid "Set Devtools port"
 msgstr "设置 Devtools 端口"
+
+msgid "Set idle shutdown timeout"
+msgstr "设置闲置关闭时长"
+
+msgid "Idle minutes (1-1440)"
+msgstr "闲置分钟数（1-1440）"
+
+msgid "Stop when idle: %1 min"
+msgstr "闲置时关闭：%1 分钟"
+
+msgid "Devtools server stopped after %1 minutes of inactivity."
+msgstr "开发工具服务已在闲置 %1 分钟后关闭。"
 
 msgid "Set authentication code"
 msgstr "设置认证码"

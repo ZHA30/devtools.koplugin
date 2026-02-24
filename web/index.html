@@ -59,6 +59,11 @@
     </section>
 
     <footer class="bottom-strip" aria-label="Project and theme controls">
+      <div id="service-status" class="service-status is-reconnecting" aria-live="polite" aria-atomic="true">
+        <span id="service-status-icon" class="status-icon" aria-hidden="true">🟡</span>
+        <span id="service-status-text">Reconnecting...</span>
+      </div>
+
       <p class="repo-note">
         <span id="repo-label">Powered by</span>
         <a
@@ -67,9 +72,11 @@
           target="_blank"
           rel="noopener noreferrer"
         >ZHA30/devtools.koplugin</a>
-        <span class="footer-sep" aria-hidden="true">|</span>
-        <button id="theme-toggle" class="theme-toggle bottom-theme-toggle" type="button">主题：☼</button>
       </p>
+
+      <div class="footer-theme-wrap">
+        <button id="theme-toggle" class="theme-toggle bottom-theme-toggle" type="button">主题：☼</button>
+      </div>
     </footer>
   </main>
 
@@ -89,6 +96,8 @@
       <p id="upload-progress-percent">0%</p>
     </div>
   </section>
+
+  <section id="toast" class="toast hidden" aria-live="polite" aria-atomic="true"></section>
 
   <section id="auth-modal" class="auth-modal hidden" role="dialog" aria-modal="true" aria-labelledby="auth-title">
     <div class="auth-card">

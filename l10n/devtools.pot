@@ -38,17 +38,16 @@ msgstr ""
 msgid "Devtools"
 msgstr ""
 
+msgid "Devtools: %1"
+msgstr ""
+
 msgid "Devtools server"
 msgstr ""
 
-msgid "Devtools server started.\n\nPort: %1\n%2"
-msgstr ""
 
 msgid "Devtools server stopped."
 msgstr ""
 
-msgid "Devtools server: %1"
-msgstr ""
 
 msgid "Directory delete requires recursive=1."
 msgstr ""
@@ -89,7 +88,7 @@ msgstr ""
 msgid "Path traversal is not allowed."
 msgstr ""
 
-msgid "Payload too large (max %1 bytes)."
+msgid "Port"
 msgstr ""
 
 msgid "Port number (1-65535)"
@@ -105,6 +104,18 @@ msgid "Save"
 msgstr ""
 
 msgid "Set Devtools port"
+msgstr ""
+
+msgid "Set idle shutdown timeout"
+msgstr ""
+
+msgid "Idle minutes (1-1440)"
+msgstr ""
+
+msgid "Stop when idle: %1 min"
+msgstr ""
+
+msgid "Devtools server stopped after %1 minutes of inactivity."
 msgstr ""
 
 msgid "Set authentication code"
