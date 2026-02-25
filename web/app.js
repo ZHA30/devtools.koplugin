@@ -7,6 +7,7 @@
   const POLL_INTERVAL_MS = 1000;
   const HEALTH_CHECK_INTERVAL_MS = 1200;
   const RECONNECT_MAX_ATTEMPTS = 40;
+  const PICKER_LOCK_TIMEOUT_MS = 1800;
 
   const messages = {
     en: {
@@ -194,6 +195,9 @@
     pollTimer: null,
     healthCheckTimer: null,
     isUploading: false,
+    uploadPickerLocked: false,
+    uploadPickerUnlockTimer: null,
+    syncingLogsAfterReconnect: false,
     uploadProgress: createUploadProgressState(),
   };
 
@@ -323,20 +327,23 @@
   }
 
   async function probeServiceHealth() {
+    const prevState = state.serviceState;
+    let nextState = "offline";
+
     try {
       const response = await apiFetch("/api/health");
-      if (!response.ok) {
-        setServiceState("offline");
-      } else {
+      if (response.ok) {
         const data = await response.json().catch(() => ({ ok: false }));
         if (data && data.ok && data.running) {
-          setServiceState("online");
-        } else {
-          setServiceState("offline");
+          nextState = "online";
         }
       }
     } catch (_err) {
-      setServiceState("offline");
+    }
+
+    setServiceState(nextState);
+    if (nextState === "online" && prevState !== "online") {
+      await syncLogsAfterReconnect();
     }
 
     scheduleHealthCheck(HEALTH_CHECK_INTERVAL_MS);
@@ -362,6 +369,10 @@
               return false;
             }
             setServiceState("online");
+            await syncLogsAfterReconnect();
+            if (runId !== reconnectingRunId) {
+              return false;
+            }
             showToast(t("success_reconnected"), "success", 2200);
             scheduleHealthCheck(HEALTH_CHECK_INTERVAL_MS);
             return true;
@@ -451,6 +462,35 @@
     if (state.isUploading) {
       closeContextMenu();
     }
+  }
+
+  function clearUploadPickerUnlockTimer() {
+    if (state.uploadPickerUnlockTimer) {
+      window.clearTimeout(state.uploadPickerUnlockTimer);
+      state.uploadPickerUnlockTimer = null;
+    }
+  }
+
+  function unlockUploadPicker() {
+    state.uploadPickerLocked = false;
+    clearUploadPickerUnlockTimer();
+  }
+
+  function lockUploadPicker() {
+    state.uploadPickerLocked = true;
+    clearUploadPickerUnlockTimer();
+    state.uploadPickerUnlockTimer = window.setTimeout(() => {
+      state.uploadPickerLocked = false;
+      state.uploadPickerUnlockTimer = null;
+    }, PICKER_LOCK_TIMEOUT_MS);
+  }
+
+  function triggerUploadPicker(inputEl) {
+    if (!inputEl || state.isUploading || state.uploadPickerLocked) {
+      return;
+    }
+    lockUploadPicker();
+    inputEl.click();
   }
 
   function computeUploadPercent() {
@@ -838,6 +878,26 @@
 
     updatePagerButtons();
     return true;
+  }
+
+  async function syncLogsAfterReconnect() {
+    if (state.syncingLogsAfterReconnect) {
+      return true;
+    }
+
+    state.syncingLogsAfterReconnect = true;
+    try {
+      const sessionsOk = await fetchSessions();
+      if (!sessionsOk) {
+        return false;
+      }
+
+      await loadSegment(state.sessions.length - 1);
+      schedulePoll();
+      return true;
+    } finally {
+      state.syncingLogsAfterReconnect = false;
+    }
   }
 
   function currentSegmentStart() {
@@ -1776,17 +1836,11 @@
     });
 
     els.uploadFilesBtn.addEventListener("click", () => {
-      if (state.isUploading) {
-        return;
-      }
-      els.uploadInput.click();
+      triggerUploadPicker(els.uploadInput);
     });
 
     els.uploadFolderBtn.addEventListener("click", () => {
-      if (state.isUploading) {
-        return;
-      }
-      els.uploadFolderInput.click();
+      triggerUploadPicker(els.uploadFolderInput);
     });
 
     els.refreshBtn.addEventListener("click", async () => {
@@ -1800,6 +1854,7 @@
     els.stopServiceBtn.addEventListener("click", stopDevtoolsService);
 
     els.uploadInput.addEventListener("change", async () => {
+      unlockUploadPicker();
       if (state.isUploading) {
         els.uploadInput.value = "";
         return;
@@ -1809,12 +1864,22 @@
     });
 
     els.uploadFolderInput.addEventListener("change", async () => {
+      unlockUploadPicker();
       if (state.isUploading) {
         els.uploadFolderInput.value = "";
         return;
       }
       await uploadFolder(els.uploadFolderInput.files);
       els.uploadFolderInput.value = "";
+    });
+
+    window.addEventListener("focus", () => {
+      if (!state.uploadPickerLocked) {
+        return;
+      }
+      window.setTimeout(() => {
+        unlockUploadPicker();
+      }, 0);
     });
 
     bindSortHeader(els.thName, "name");
@@ -1863,6 +1928,7 @@
         state.pollTimer = null;
       }
       stopHealthCheckLoop();
+      unlockUploadPicker();
       if (toastTimer) {
         window.clearTimeout(toastTimer);
         toastTimer = null;
@@ -1884,14 +1950,13 @@
 
     await probeServiceHealth();
 
-    const [, sessionsOk] = await Promise.all([
+    const [remoteOk, logsOk] = await Promise.all([
       loadRemote(""),
-      fetchSessions(),
+      syncLogsAfterReconnect(),
     ]);
 
-    if (sessionsOk) {
-      await loadSegment(state.segmentIndex);
-      schedulePoll();
+    if (!remoteOk || !logsOk) {
+      return;
     }
   }
 
